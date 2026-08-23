@@ -70,3 +70,5 @@ Testing/
 
 # Other
 agy.txt
+graphify-out/cost.json
+graphify-out/cache/

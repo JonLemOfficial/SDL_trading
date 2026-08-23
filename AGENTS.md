@@ -1,71 +1,85 @@
 # Agent Instructions (AGENTS.md)
 
-This file contains guidelines and context for LLM agents (like Claude, Cursor, Cline, or Antigravity) working on the `SDL_Trading` codebase. Read this carefully before modifying the architecture or implementing new features.
+Guidelines for LLM agents working on the `SDL_Trading` codebase.
 
 ## Architecture Overview
 
-1. **SDL3 Callback Paradigm**: 
-   The application uses the new SDL3 main callbacks.
-   - `SDL_AppInit` (setup, threads, fonts)
-   - `SDL_AppEvent` (input routing)
-   - `SDL_AppIterate` (render loop)
-   These are located in `src/main.cpp`. Avoid introducing traditional blocking `while(1)` loops.
+See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the full module map and function reference.
 
-2. **State Management**:
-   The entire application state is stored in the `AppState` struct defined in `src/app_state.hpp`. Pass the `AppState*` pointer to all major update and render functions.
+```
+src/
+├── main.cpp          ← SDL3 callback entry (thin wrapper)
+├── core/             ← types, constants, AppState, layout
+├── app/              ← SDL_AppInit / AppEvent / AppIterate / AppQuit
+├── window/           ← titlebar, snap, hit-test (borderless window)
+├── ui/               ← draw primitives, tabs, toolbox, chrome
+├── services/         ← HTTP, favorites, account mock
+└── modules/          ← chart, market_table, orderbook, trades, alerts, right_panel
+```
 
-3. **Rendering Paradigm**:
-   We use a custom, lightweight immediate-mode-style drawing wrapper over SDL3 rendering (see `src/ui_utils.hpp`).
-   - DO NOT introduce heavy UI frameworks (like ImGui or Qt) unless explicitly requested by the user. 
-   - Use `ui_fill_rect`, `ui_draw_rect`, `ui_draw_line`, `ui_draw_text` for rendering.
-   - Respect layout boundaries. Calculate coordinates relative to the panel configurations in `AppLayout` (e.g., `state->layout.chart_x`).
+### SDL3 Callback Paradigm
 
-4. **Multi-threading & Mutexes**:
-   The UI must never block. Network requests (like Binance API calls) run in background threads (`candle_thread`, `ob_thread`, etc.).
-   - Shared data (e.g., `state->candles`, `state->trades`, `state->orderbook`) **MUST** be locked using `std::lock_guard<std::mutex> lock(state-><target>_mtx);` before reading or writing.
-   - Ensure mutexes are never nested in a way that causes deadlocks. Keep locks as short-lived as possible (e.g., lock, copy data, unlock).
+The application uses SDL3 main callbacks, forwarded from `main.cpp` to `app/`:
 
-## Event Handling (`SDL_AppEvent`)
+- `app_init` — setup, threads, fonts
+- `app_event` — input routing
+- `app_iterate` — render loop
+- `app_quit` — shutdown
 
-All mouse and keyboard events are handled in `src/main.cpp`.
-- Event routing is strictly coordinate-based. 
-- When adding a new interactive element, ensure its click handler is placed in the correct spatial block in `SDL_AppEvent` (e.g., "Chart area clicks", "Right panel area clicks").
-- Return `SDL_APP_CONTINUE` immediately after handling a click to prevent click-through.
+Avoid introducing traditional blocking `while(1)` loops.
+
+### State Management
+
+All application state lives in `AppState` (`core/app_state.hpp`). Pass `AppState*` to every update/render function.
+
+### Rendering Paradigm
+
+Lightweight immediate-mode drawing via `ui/ui_utils.hpp`:
+
+- `ui_fill_rect`, `ui_draw_rect`, `ui_draw_line`, `ui_draw_text`
+- DO NOT introduce heavy UI frameworks unless explicitly requested
+- Compute coordinates relative to `state->layout` (`core/layout.hpp`)
+
+### Multi-threading & Mutexes
+
+Network requests run in background threads. Lock shared data before access:
+
+```cpp
+std::lock_guard<std::mutex> lock(state->candles_mtx);
+```
+
+Keep locks short-lived; never nest mutexes in ways that cause deadlocks.
+
+## Event Handling
+
+Input routing lives in `app/app_event.cpp`. It is strictly coordinate-based:
+
+- Titlebar/window → `window/titlebar.*`, `window/window_snap.*`
+- App tabs → `ui/app_tabs.*`
+- Chart/toolbox → `ui/toolbox.*`, `modules/chart.*`
+- Market table → `modules/market_table.*`
+- Right panel → `modules/right_panel.*`, `modules/alerts.*`
+
+Return `SDL_APP_CONTINUE` immediately after handling a click to prevent click-through.
 
 ## Build Instructions
 
-To build the project for testing your changes:
 ```bash
 cmake -B build -S .
 cmake --build build -j4
-```
-Execution:
-```bash
 ./build/sdl-trading
 ```
 
 ## Adding New Features
 
-1. **Adding a new Tool to the Toolbox**:
-   - Add the tool to `AppState::Tool` enum.
-   - Update `draw_toolbox` in `main.cpp` with a new icon/tooltip.
-   - Handle the drawing interaction inside the chart area in `main.cpp` and `chart.cpp` (`drawings` array).
-2. **Adding a new Tab**:
-   - Add to `RightTab` or `MarketTab` enum in `types.hpp`.
-   - Update `hit_right_tab` or `hit_tab` hit-testing functions.
-   - Add a dispatch call in `draw_right_panel` or `draw_table`.
+1. **New toolbox tool**: add to `AppState::Tool`, update `ui/toolbox.*`, handle in `app/app_event.cpp` + `modules/chart.*`
+2. **New tab**: add enum in `core/types.hpp`, update hit-test in the relevant module, dispatch in `app/app_render.cpp`
+3. **New panel layout field**: extend `AppLayout` in `core/app_state.hpp`, update `core/layout.cpp` and hit-tests in `app/app_event.cpp`
 
 ## Style & Conventions
 
-- Use standard C++17/20 features.
-- Avoid excessive OOP (classes/inheritance) where simple C-style structs and functions suffice.
-- Use `snake_case` for variables and functions.
-- Use `PascalCase` for Structs and Enums.
-- Use 2 spaces for indentation.
-- Group logical blocks visually with ASCII dividers (e.g., `// ── Section ──`).
-
-
-## Modifying UI
-
-- UI layout coordinates are strictly defined in `AppLayout`. Avoid magic numbers for global layout coordinates; compute them relative to `state->layout`.
-- Update click hit-boxes in `SDL_AppEvent` (`main.cpp`) whenever changing the visual position of clickable elements.
+- C++17/20, snake_case functions, PascalCase structs/enums
+- 2-space indentation
+- ASCII section dividers (`// ── Section ──`)
+- Avoid excessive OOP; prefer structs + free functions
+- Document public functions with `///` comments in headers

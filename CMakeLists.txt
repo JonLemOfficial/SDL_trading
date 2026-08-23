@@ -8,9 +8,7 @@ project(SDL_TradingPlatform CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Option: use FetchContent for dependencies (default ON)
 option(DOWNLOAD_DEPENDENCIES "Download SDL3/nlohmann dependencies via FetchContent" ON)
-# Option: build with Telegram notification support (default ON, requires libcurl)
 option(ENABLE_TELEGRAM "Enable Telegram alert notifications via libcurl" ON)
 
 # =============================================================================
@@ -20,7 +18,6 @@ option(ENABLE_TELEGRAM "Enable Telegram alert notifications via libcurl" ON)
 if(DOWNLOAD_DEPENDENCIES)
     include(FetchContent)
 
-    # ── SDL3 ──────────────────────────────────────────────────────────────────
     FetchContent_Declare(
         SDL3
         GIT_REPOSITORY "https://github.com/libsdl-org/SDL.git"
@@ -29,7 +26,6 @@ if(DOWNLOAD_DEPENDENCIES)
     )
     FetchContent_MakeAvailable(SDL3)
 
-    # ── SDL3_ttf ──────────────────────────────────────────────────────────────
     FetchContent_Declare(
         SDL3_ttf
         GIT_REPOSITORY "https://github.com/libsdl-org/SDL_ttf.git"
@@ -38,7 +34,6 @@ if(DOWNLOAD_DEPENDENCIES)
     )
     FetchContent_MakeAvailable(SDL3_ttf)
 
-    # ── SDL3_image ────────────────────────────────────────────────────────────
     FetchContent_Declare(
         SDL3_image
         GIT_REPOSITORY "https://github.com/libsdl-org/SDL_image.git"
@@ -47,7 +42,6 @@ if(DOWNLOAD_DEPENDENCIES)
     )
     FetchContent_MakeAvailable(SDL3_image)
 
-    # ── nlohmann/json ─────────────────────────────────────────────────────────
     FetchContent_Declare(
         json
         URL          "https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz"
@@ -62,7 +56,6 @@ else()
     find_package(nlohmann_json 3.12.0 REQUIRED)
 endif()
 
-# ── libcurl (HTTP + Telegram) ──────────────────────────────────────────────────
 find_package(CURL REQUIRED)
 
 # =============================================================================
@@ -83,48 +76,46 @@ set(TRADING_SOURCES
     # ── Entry point ──────────────────────────────────────────────
     src/main.cpp
 
-    # ── Theme / UI ───────────────────────────────────────────────
-    src/theme.cpp
-    src/ui_utils.cpp
+    # ── App lifecycle (SDL3 callbacks) ───────────────────────────
+    src/app/app_init.cpp
+    src/app/app_event.cpp
+    src/app/app_render.cpp
+    src/app/app_quit.cpp
 
-    # ── Networking ───────────────────────────────────────────────
-    src/network.cpp
+    # ── Core ─────────────────────────────────────────────────────
+    src/core/layout.cpp
 
-    # ── Persistence helpers ───────────────────────────────────────
-    src/favorites.cpp
+    # ── Window management ────────────────────────────────────────
+    src/window/titlebar.cpp
+    src/window/window_snap.cpp
+    src/window/window_hit_test.cpp
 
-    # ── Chart module ─────────────────────────────────────────────
-    src/chart.cpp
+    # ── UI ───────────────────────────────────────────────────────
+    src/ui/theme.cpp
+    src/ui/ui_utils.cpp
+    src/ui/app_tabs.cpp
+    src/ui/toolbox.cpp
+    src/ui/chrome.cpp
 
-    # ── Market table (SPOT / FUTURES / FAV + search) ─────────────
-    src/market_table.cpp
+    # ── Services ─────────────────────────────────────────────────
+    src/services/network.cpp
+    src/services/favorites.cpp
+    src/services/account.cpp
 
-    # ── Order book module ─────────────────────────────────────────
-    src/orderbook.cpp
-
-    # ── Recent trades module ──────────────────────────────────────
-    src/trades.cpp
-
-    # ── Alerts engine + UI ────────────────────────────────────────
-    src/alerts.cpp
-
-    # ── Right panel (OB / Trades / Alerts tab switcher) ──────────
-    src/right_panel.cpp
+    # ── Feature modules ──────────────────────────────────────────
+    src/modules/chart.cpp
+    src/modules/market_table.cpp
+    src/modules/orderbook.cpp
+    src/modules/trades.cpp
+    src/modules/alerts.cpp
+    src/modules/right_panel.cpp
 )
 
 add_executable(sdl-trading ${TRADING_SOURCES})
 
-# =============================================================================
-#  Include directories
-# =============================================================================
-
 target_include_directories(sdl-trading PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
-
-# =============================================================================
-#  Link libraries
-# =============================================================================
 
 target_link_libraries(sdl-trading PRIVATE
     SDL3::SDL3
@@ -134,23 +125,14 @@ target_link_libraries(sdl-trading PRIVATE
     CURL::libcurl
 )
 
-# Link math library on Unix
 if(UNIX)
     target_link_libraries(sdl-trading PRIVATE m)
 endif()
-
-# =============================================================================
-#  Compile definitions
-# =============================================================================
 
 target_compile_definitions(sdl-trading PRIVATE
     SDL_MAIN_USE_CALLBACKS
     $<$<BOOL:${ENABLE_TELEGRAM}>:ENABLE_TELEGRAM>
 )
-
-# =============================================================================
-#  Compiler warnings
-# =============================================================================
 
 if(MSVC)
     target_compile_options(sdl-trading PRIVATE /W3)
@@ -160,14 +142,8 @@ else()
     )
 endif()
 
-# =============================================================================
-#  Platform-specific settings
-# =============================================================================
-
-# Windows: hide console window in release
 set_property(TARGET sdl-trading PROPERTY WIN32_EXECUTABLE TRUE)
 
-# Emscripten (WebAssembly)
 if(EMSCRIPTEN)
     set_property(TARGET sdl-trading PROPERTY SUFFIX ".html")
     target_link_options(sdl-trading PRIVATE
@@ -176,10 +152,6 @@ if(EMSCRIPTEN)
         -sPTHREAD_POOL_SIZE=8
     )
 endif()
-
-# =============================================================================
-#  Build info printout
-# =============================================================================
 
 message(STATUS "=== SDL Trading Platform ===")
 message(STATUS "  C++ Standard   : ${CMAKE_CXX_STANDARD}")

@@ -1,0 +1,3018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SDL_Trading — Complete Call Flow &amp; Architecture Documentation</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+:root {
+  --bg: #0f172a; --surface: #1e293b; --border: #334155;
+  --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8;
+  --warn: #fbbf24; --err: #f87171; --ok: #34d399;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+.container { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+h1 { font-size: 2.4rem; margin-bottom: 8px; background: linear-gradient(135deg, var(--accent), #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+h2 { font-size: 1.7rem; margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); }
+h3 { font-size: 1.25rem; margin: 32px 0 12px; color: var(--accent); }
+h4 { font-size: 1.05rem; margin: 20px 0 8px; color: var(--warn); }
+p { margin: 8px 0; color: var(--muted); }
+.subtitle { color: var(--muted); font-size: 1.1rem; margin-bottom: 32px; }
+.mermaid { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin: 20px 0; overflow-x: auto; position: relative; }
+.mermaid.is-enhanced { padding: 0; overflow: hidden; min-height: 260px; }
+.mermaid-viewport { padding: 54px 24px 24px; overflow: hidden; cursor: grab; touch-action: none; min-height: 260px; }
+.mermaid-viewport.is-dragging { cursor: grabbing; }
+.mermaid-viewport svg { max-width: none !important; height: auto; transform-origin: 0 0; transition: transform 120ms ease; }
+.mermaid-toolbar { position: absolute; top: 10px; right: 10px; z-index: 3; display: flex; align-items: center; gap: 6px; padding: 6px; background: rgba(15,23,42,0.92); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.28); }
+.mermaid-toolbar button, .mermaid-toolbar .zoom-level { height: 28px; min-width: 32px; border: 1px solid var(--border); border-radius: 6px; background: #1e293b; color: var(--text); font: 600 0.78rem system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: center; }
+.mermaid-toolbar button { cursor: pointer; }
+.mermaid-toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+.mermaid-toolbar .zoom-level { min-width: 52px; color: var(--muted); background: transparent; }
+.call-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.92rem; }
+.call-table th { background: #1a2744; color: var(--accent); text-align: left; padding: 10px 14px; border: 1px solid var(--border); }
+.call-table td { padding: 8px 14px; border: 1px solid var(--border); vertical-align: top; }
+.call-table tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+.tag-async { background: #7c3aed33; color: #a78bfa; }
+.tag-class { background: #05966933; color: var(--ok); }
+.tag-func { background: #2563eb33; color: var(--accent); }
+.tag-cmd { background: #d9770633; color: var(--warn); }
+.tag-endpoint { background: #dc262633; color: var(--err); }
+.tag-hook { background: #db277733; color: #f472b6; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin: 16px 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin: 16px 0; }
+.arrow-chain { font-family: 'Fira Code', monospace; font-size: 0.85rem; color: var(--accent); padding: 10px; background: rgba(56,189,248,0.06); border-radius: 6px; }
+code { font-family: 'Fira Code', 'Cascadia Code', monospace; background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 3px; font-size: 0.88em; }
+ul, ol { margin: 8px 0 8px 24px; color: var(--muted); }
+li { margin: 4px 0; }
+a { color: var(--accent); }
+hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+.nav { position: sticky; top: 0; background: var(--bg); z-index: 10; padding: 12px 0; border-bottom: 1px solid var(--border); display: flex; gap: 20px; flex-wrap: wrap; font-size: 0.9rem; }
+.nav a { text-decoration: none; }
+.nav a:hover { text-decoration: underline; }
+@media (max-width: 768px) { .container { padding: 16px; } h1 { font-size: 1.8rem; } }
+
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>SDL_Trading — Complete Call Flow &amp; Architecture Documentation</h1>
+<p class="subtitle">Generated from graphify knowledge graph: 332 nodes, 646 edges, 13 communities. Commit: 3247e7c</p>
+
+<div class="nav">
+    <a href="#overview">Architecture Overview</a>
+    <a href="#cli-skills">CLI &amp; Skill Installers</a>
+    <a href="#ingest-cache-update">Ingestion &amp; Updates</a>
+    <a href="#serve-api">Serving API</a>
+    <a href="#app-state-core-models">App State &amp; Core Models</a>
+    <a href="#alerts-engine">Alerts Engine</a>
+    <a href="#ui-theming">UI Theming</a>
+    <a href="#app-layout-dimensions">App Layout Dimensions</a>
+    <a href="#order-book-model">Order Book Model</a>
+    <a href="#chart-drawings">Chart Drawings</a>
+    <a href="#candlestick-data-model">Candlestick Data Model</a>
+    <a href="#trade-data-model">Trade Data Model</a>
+</div>
+
+<!-- ====== Architecture Overview ====== -->
+<h2 id="overview">1. Architecture Overview</h2>
+
+<div class="mermaid">
+
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    CLI_SKILLS_9964CBB8("CLI &amp; Skill Installers<br/><small>69 nodes</small>")
+    class CLI_SKILLS_9964CBB8 module;
+    INGEST_CACHE_UPDATE_FF457338("Ingestion &amp; Updates<br/><small>10 nodes</small>")
+    class INGEST_CACHE_UPDATE_FF457338 module;
+    SERVE_API_35EC8E86("Serving API<br/><small>38 nodes</small>")
+    class SERVE_API_35EC8E86 module;
+    APP_STATE_CORE_MODELS_F0283742("App State &amp; Core Models<br/><small>86 nodes</small>")
+    class APP_STATE_CORE_MODELS_F0283742 module;
+    ALERTS_ENGINE_B8DBE0B4("Alerts Engine<br/><small>39 nodes</small>")
+    class ALERTS_ENGINE_B8DBE0B4 module;
+    UI_THEMING_D20B9BE4("UI Theming<br/><small>39 nodes</small>")
+    class UI_THEMING_D20B9BE4 module;
+    APP_LAYOUT_DIMENSIONS_936F4C7C("App Layout Dimensions<br/><small>21 nodes</small>")
+    class APP_LAYOUT_DIMENSIONS_936F4C7C module;
+    ORDER_BOOK_MODEL_FAD07713("Order Book Model<br/><small>9 nodes</small>")
+    class ORDER_BOOK_MODEL_FAD07713 module;
+    CHART_DRAWINGS_9F89DC38("Chart Drawings<br/><small>8 nodes</small>")
+    class CHART_DRAWINGS_9F89DC38 module;
+    CANDLESTICK_DATA_MODEL_4277811A("Candlestick Data Model<br/><small>7 nodes</small>")
+    class CANDLESTICK_DATA_MODEL_4277811A module;
+    TRADE_DATA_MODEL_4AA3F95A("Trade Data Model<br/><small>6 nodes</small>")
+    class TRADE_DATA_MODEL_4AA3F95A module;
+    SERVE_API_35EC8E86 -->|imports x19| CLI_SKILLS_9964CBB8
+    SERVE_API_35EC8E86 -->|references x15| APP_STATE_CORE_MODELS_F0283742
+    CLI_SKILLS_9964CBB8 -->|calls x14| SERVE_API_35EC8E86
+    SERVE_API_35EC8E86 -->|contains x12| ALERTS_ENGINE_B8DBE0B4
+    CLI_SKILLS_9964CBB8 -->|references x12| APP_STATE_CORE_MODELS_F0283742
+    APP_STATE_CORE_MODELS_F0283742 -->|references x6| CLI_SKILLS_9964CBB8
+    CLI_SKILLS_9964CBB8 -->|calls x6| ALERTS_ENGINE_B8DBE0B4
+    CLI_SKILLS_9964CBB8 -->|calls x4| UI_THEMING_D20B9BE4
+    INGEST_CACHE_UPDATE_FF457338 -->|references x4| APP_STATE_CORE_MODELS_F0283742
+    APP_STATE_CORE_MODELS_F0283742 -->|references x3| ALERTS_ENGINE_B8DBE0B4
+    CLI_SKILLS_9964CBB8 -->|contains x3| INGEST_CACHE_UPDATE_FF457338
+    APP_STATE_CORE_MODELS_F0283742 -->|references x2| CHART_DRAWINGS_9F89DC38
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h4>Architecture Layers</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>Layer</th><th>Nodes</th><th>Communities</th></tr>
+      <tr><td>CLI &amp; Skill Installers</td><td>69</td><td><code>4, 5, 7</code></td></tr><tr><td>Ingestion &amp; Updates</td><td>10</td><td><code>8</code></td></tr><tr><td>Serving API</td><td>38</td><td><code>3</code></td></tr><tr><td>App State &amp; Core Models</td><td>86</td><td><code>0</code></td></tr><tr><td>Alerts Engine</td><td>39</td><td><code>1</code></td></tr><tr><td>UI Theming</td><td>39</td><td><code>2</code></td></tr><tr><td>App Layout Dimensions</td><td>21</td><td><code>6</code></td></tr><tr><td>Order Book Model</td><td>9</td><td><code>9</code></td></tr><tr><td>Chart Drawings</td><td>8</td><td><code>10</code></td></tr><tr><td>Candlestick Data Model</td><td>7</td><td><code>11</code></td></tr><tr><td>Trade Data Model</td><td>6</td><td><code>12</code></td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Core Flow</h4>
+    <div class="arrow-chain">App Layout Dimensions -&gt; CLI &amp; Skill Installers -&gt; Serving API -&gt; App State &amp; Core Models -&gt; Alerts Engine -&gt; Ingestion &amp; Updates -&gt; UI Theming</div>
+  </div>
+</div>
+<div class="grid">
+  <div class="card">
+    <h4>Graph Report Highlights</h4>
+    <ul>
+      <li>332 nodes · 646 edges · 13 communities</li>
+      <li>Extraction: 83% EXTRACTED · 17% INFERRED · 0% AMBIGUOUS · INFERRED: 112 edges (avg confidence: 0.85)</li>
+      <li>Token cost: 0 input · 0 output</li>
+      <li>1. `AppState` - 134 edges</li>
+      <li>2. `ThemeColors` - 37 edges</li>
+      <li>3. `SDL_AppEvent()` - 27 edges</li>
+    </ul>
+  </div>
+</div>
+<hr>
+<!-- ====== 2. CLI & Skill Installers ====== -->
+<h2 id="cli-skills">2. CLI &amp; Skill Installers</h2>
+<p>CLI &amp; Skill Installers groups implementation around utilscpp, draw, maincpp, right, mostly in src/ui_utils.cpp, src/main.cpp, src/favorites.cpp. This section covers 69 nodes and 218 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: CLI &amp; Skill Installers (69 nodes, 218 edges)
+    subgraph cli_skills_src_ui_utils_cpp_925491f2["src/ui_utils.cpp"]
+        src_ui_utils_ui_button_57961e02("ui_button()<br/><small>src/ui_utils.cpp</small>")
+        src_ui_utils_ui_fill_rect_6973e688("ui_fill_rect()<br/><small>src/ui_utils.cpp</small>")
+        src_ui_utils_ui_draw_rect_7bfe3b4b("ui_draw_rect()<br/><small>src/ui_utils.cpp</small>")
+        src_ui_utils_ui_draw_text_centered_252fd971("ui_draw_text_centered()<br/><small>src/ui_utils.cpp</small>")
+        src_ui_utils_ui_draw_text_dfe0668c("ui_draw_text()<br/><small>src/ui_utils.cpp</small>")
+        src_ui_utils_ui_draw_text_right_9e4e6116("ui_draw_text_right()<br/><small>src/ui_utils.cpp</small>")
+        src_ui_utils_ui_fill_rect_rounded_98e27317("ui_fill_rect_rounded()<br/><small>src/ui_utils.cpp</small>")
+        src_ui_utils_ui_search_bar_46296ff1("ui_search_bar()<br/><small>src/ui_utils.cpp</small>")
+    end
+    subgraph cli_skills_src_main_cpp_3614ce5c["src/main.cpp"]
+        src_main_3231ff52("main.cpp")
+        src_main_sdl_appiterate_7aefb40e("SDL_AppIterate()<br/><small>src/main.cpp</small>")
+        src_main_update_layout_00c66ef9("update_layout()<br/><small>src/main.cpp</small>")
+        src_main_draw_toolbox_524499ec("draw_toolbox()<br/><small>src/main.cpp</small>")
+        src_main_draw_dividers_ee6e07a8("draw_dividers()<br/><small>src/main.cpp</small>")
+        src_main_draw_notification_0f7337b2("draw_notification()<br/><small>src/main.cpp</small>")
+    end
+    subgraph cli_skills_src_right_panel_cpp_cba4b981["src/right_panel.cpp"]
+        src_right_panel_draw_right_panel_86616a85("draw_right_panel()<br/><small>src/right_panel.cpp</small>")
+        src_right_panel_cpp_src_right_panel_2f87738e("right_panel.cpp")
+    end
+    src_chart_draw_chart_895badf9("draw_chart()<br/><small>src/chart.cpp</small>")
+    src_market_table_draw_table_c32784c9("draw_table()<br/><small>src/market_table.cpp</small>")
+    src_main_sdl_appiterate_7aefb40e -->|calls| src_main_update_layout_00c66ef9
+    src_main_sdl_appiterate_7aefb40e -->|calls| src_main_draw_toolbox_524499ec
+    src_main_sdl_appiterate_7aefb40e -->|calls| src_main_draw_dividers_ee6e07a8
+    src_main_sdl_appiterate_7aefb40e -->|calls| src_main_draw_notification_0f7337b2
+    src_ui_utils_ui_button_57961e02 -->|calls| src_ui_utils_ui_fill_rect_6973e688
+    src_ui_utils_ui_button_57961e02 -->|calls| src_ui_utils_ui_draw_rect_7bfe3b4b
+    src_ui_utils_ui_button_57961e02 -->|calls| src_ui_utils_ui_draw_text_centered_252fd971
+    src_ui_utils_ui_draw_text_centered_252fd971 -->|calls| src_ui_utils_ui_draw_text_dfe0668c
+    src_ui_utils_ui_draw_text_right_9e4e6116 -->|calls| src_ui_utils_ui_draw_text_dfe0668c
+    src_ui_utils_ui_fill_rect_rounded_98e27317 -->|calls| src_ui_utils_ui_fill_rect_6973e688
+    src_ui_utils_ui_search_bar_46296ff1 -->|calls| src_ui_utils_ui_fill_rect_6973e688
+    src_ui_utils_ui_search_bar_46296ff1 -->|calls| src_ui_utils_ui_draw_rect_7bfe3b4b
+    src_ui_utils_ui_search_bar_46296ff1 -->|calls| src_ui_utils_ui_draw_text_dfe0668c
+    src_chart_draw_chart_895badf9 -->|calls| src_ui_utils_ui_fill_rect_6973e688
+    src_chart_draw_chart_895badf9 -->|calls| src_ui_utils_ui_draw_rect_7bfe3b4b
+    src_chart_draw_chart_895badf9 -->|calls| src_ui_utils_ui_draw_text_dfe0668c
+    src_chart_draw_chart_895badf9 -->|calls| src_ui_utils_ui_draw_text_centered_252fd971
+    src_main_draw_dividers_ee6e07a8 -->|calls| src_ui_utils_ui_fill_rect_6973e688
+    src_main_draw_notification_0f7337b2 -->|calls| src_ui_utils_ui_fill_rect_6973e688
+    src_main_draw_notification_0f7337b2 -->|calls| src_ui_utils_ui_draw_rect_7bfe3b4b
+    src_main_draw_notification_0f7337b2 -->|calls| src_ui_utils_ui_draw_text_centered_252fd971
+    src_main_draw_toolbox_524499ec -->|calls| src_ui_utils_ui_fill_rect_6973e688
+    src_main_draw_toolbox_524499ec -->|calls| src_ui_utils_ui_draw_rect_7bfe3b4b
+    src_main_draw_toolbox_524499ec -->|calls| src_ui_utils_ui_draw_text_dfe0668c
+    %% Omitted for readability: 51 nodes, 13 edges
+    class src_ui_utils_ui_button_57961e02 function;
+    class src_ui_utils_ui_fill_rect_6973e688 function;
+    class src_ui_utils_ui_draw_rect_7bfe3b4b function;
+    class src_ui_utils_ui_draw_text_centered_252fd971 function;
+    class src_ui_utils_ui_draw_text_dfe0668c function;
+    class src_ui_utils_ui_draw_text_right_9e4e6116 function;
+    class src_ui_utils_ui_fill_rect_rounded_98e27317 function;
+    class src_ui_utils_ui_search_bar_46296ff1 function;
+    class src_main_3231ff52 function;
+    class src_main_sdl_appiterate_7aefb40e function;
+    class src_main_update_layout_00c66ef9 function;
+    class src_main_draw_toolbox_524499ec function;
+    class src_main_draw_dividers_ee6e07a8 function;
+    class src_main_draw_notification_0f7337b2 function;
+    class src_right_panel_draw_right_panel_86616a85 function;
+    class src_right_panel_cpp_src_right_panel_2f87738e function;
+    class src_chart_draw_chart_895badf9 function;
+    class src_market_table_draw_table_c32784c9 function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>draw_alert_modal()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppIterate()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>fmt_price()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>ui_draw_rect()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>ui_draw_text()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br>+2 more</td>
+  <td>draw_alert_modal() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>draw_alerts()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_right_panel()</code><br><small style="color:var(--muted)">src/right_panel.cpp</small></td>
+  <td><code>alert_freq_label()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>alert_type_label()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>fmt_price()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br>+4 more</td>
+  <td>draw_alerts() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>draw_chart()</code><br><small style="color:var(--muted)">src/chart.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppIterate()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>fmt_pct()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>fmt_price()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>fmt_time()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br>+8 more</td>
+  <td>draw_chart() node in src/chart.cpp.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>draw_dividers()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppIterate()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>ui_fill_rect()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>draw_dividers() node in src/main.cpp.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>draw_notification()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppIterate()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>ui_draw_rect()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>ui_draw_text_centered()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>ui_fill_rect()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>draw_notification() node in src/main.cpp.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>draw_toolbox()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppIterate()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>ui_draw_line()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>ui_draw_rect()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>ui_draw_text()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br>+2 more</td>
+  <td>draw_toolbox() node in src/main.cpp.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>SDL_AppIterate()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>draw_alert_modal()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>draw_chart()</code><br><small style="color:var(--muted)">src/chart.cpp</small><br><code>draw_dividers()</code><br><small style="color:var(--muted)">src/main.cpp</small><br>+5 more</td>
+  <td>SDL_AppIterate() node in src/main.cpp.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>draw_table()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppIterate()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>cs_base()</code><br><small style="color:var(--muted)">src/market_table.cpp</small><br><code>fav_has()</code><br><small style="color:var(--muted)">src/favorites.cpp</small><br><code>fmt_pct()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br>+13 more</td>
+  <td>draw_table() node in src/market_table.cpp.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>draw_orderbook()</code><br><small style="color:var(--muted)">src/orderbook.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_right_panel()</code><br><small style="color:var(--muted)">src/right_panel.cpp</small></td>
+  <td><code>fmt_price()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>fmt_vol()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>ui_draw_text()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br>+3 more</td>
+  <td>draw_orderbook() node in src/orderbook.cpp.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>draw_right_panel()</code><br><small style="color:var(--muted)">src/right_panel.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppIterate()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>draw_alerts()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>draw_orderbook()</code><br><small style="color:var(--muted)">src/orderbook.cpp</small><br><code>draw_trades()</code><br><small style="color:var(--muted)">src/trades.cpp</small><br>+5 more</td>
+  <td>draw_right_panel() node in src/right_panel.cpp.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>draw_trades()</code><br><small style="color:var(--muted)">src/trades.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_right_panel()</code><br><small style="color:var(--muted)">src/right_panel.cpp</small></td>
+  <td><code>fmt_price()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>fmt_time()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>fmt_vol()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br>+3 more</td>
+  <td>draw_trades() node in src/trades.cpp.</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td><code>fmt_pct()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>alerts_engine()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>draw_chart()</code><br><small style="color:var(--muted)">src/chart.cpp</small><br><code>draw_table()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>fmt_pct() node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>fmt_price()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>alerts_engine()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>draw_alert_modal()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>draw_alerts()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br>+4 more</td>
+  <td>No direct outbound edge</td>
+  <td>fmt_price() node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>fmt_time()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_chart()</code><br><small style="color:var(--muted)">src/chart.cpp</small><br><code>draw_trades()</code><br><small style="color:var(--muted)">src/trades.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>fmt_time() node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>fmt_vol()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_chart()</code><br><small style="color:var(--muted)">src/chart.cpp</small><br><code>draw_orderbook()</code><br><small style="color:var(--muted)">src/orderbook.cpp</small><br><code>draw_table()</code><br><small style="color:var(--muted)">src/market_table.cpp</small><br>+1 more</td>
+  <td>No direct outbound edge</td>
+  <td>fmt_vol() node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td><code>ui_button()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>point_in()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>ui_draw_rect()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>ui_draw_text_centered()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br>+1 more</td>
+  <td>ui_button() node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td><code>ui_draw_line()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_chart()</code><br><small style="color:var(--muted)">src/chart.cpp</small><br><code>draw_toolbox()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>ui_draw_line() node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>18</td>
+  <td><code>ui_draw_rect()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_alert_modal()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>draw_alerts()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>draw_chart()</code><br><small style="color:var(--muted)">src/chart.cpp</small><br>+6 more</td>
+  <td>No direct outbound edge</td>
+  <td>ui_draw_rect() node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>19</td>
+  <td><code>ui_draw_text()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_alert_modal()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>draw_alerts()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>draw_chart()</code><br><small style="color:var(--muted)">src/chart.cpp</small><br>+8 more</td>
+  <td>No direct outbound edge</td>
+  <td>ui_draw_text() node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>20</td>
+  <td><code>ui_draw_text_centered()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_alert_modal()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>draw_alerts()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>draw_chart()</code><br><small style="color:var(--muted)">src/chart.cpp</small><br>+6 more</td>
+  <td><code>ui_draw_text()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>ui_draw_text_centered() node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>21</td>
+  <td><code>ui_draw_text_right()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_orderbook()</code><br><small style="color:var(--muted)">src/orderbook.cpp</small><br><code>draw_table()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><code>ui_draw_text()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>ui_draw_text_right() node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>22</td>
+  <td><code>ui_fill_rect()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_alert_modal()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>draw_alerts()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>draw_chart()</code><br><small style="color:var(--muted)">src/chart.cpp</small><br>+10 more</td>
+  <td>No direct outbound edge</td>
+  <td>ui_fill_rect() node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>23</td>
+  <td><code>ui_fill_rect_rounded()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>ui_fill_rect()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>ui_fill_rect_rounded() node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>24</td>
+  <td><code>ui_search_bar()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_table()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><code>ui_draw_rect()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>ui_draw_text()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>ui_fill_rect()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>ui_search_bar() node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td><code>ui_text_height()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>ui_text_height() node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>26</td>
+  <td><code>ui_text_width()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_chart()</code><br><small style="color:var(--muted)">src/chart.cpp</small><br><code>draw_toolbox()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>ui_text_width() node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>27</td>
+  <td><code>SDL_Color</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>SDL_Color node in project.</td>
+</tr>
+<tr>
+  <td>28</td>
+  <td><code>SDL_Renderer</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>SDL_Renderer node in project.</td>
+</tr>
+<tr>
+  <td>29</td>
+  <td><code>ui_utils.cpp</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>ui_utils.hpp</code><br><small style="color:var(--muted)">src/ui_utils.hpp</small></td>
+  <td>ui_utils.cpp node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>30</td>
+  <td><code>string</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>string node in project.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>src/ui_utils.cpp</code></td><td>16 nodes</td></tr>
+<tr><td><code>src/main.cpp</code></td><td>8 nodes</td></tr>
+<tr><td><code>src/favorites.cpp</code></td><td>5 nodes</td></tr>
+<tr><td><code>src/favorites.hpp</code></td><td>3 nodes</td></tr>
+<tr><td><code>src/alerts.cpp</code></td><td>2 nodes</td></tr>
+<tr><td><code>src/chart.cpp</code></td><td>2 nodes</td></tr>
+<tr><td><code>src/orderbook.cpp</code></td><td>2 nodes</td></tr>
+<tr><td><code>src/right_panel.cpp</code></td><td>2 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: calls x79, imports x63, references x44, contains x31. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 3. Ingestion & Updates ====== -->
+<h2 id="ingest-cache-update">3. Ingestion &amp; Updates</h2>
+<p>Ingestion &amp; Updates groups implementation around networkcpp, fetch, http, candles, mostly in src/network.cpp, src/chart.cpp, src/market_table.cpp. This section covers 10 nodes and 12 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Ingestion &amp; Updates (10 nodes, 12 edges)
+    subgraph ingest_cache_update_src_network_cpp_8c6dee56["src/network.cpp"]
+        src_network_telegram_send_6cc4aac7("telegram_send()<br/><small>src/network.cpp</small>")
+        src_network_http_post_ced5415a("http_post()<br/><small>src/network.cpp</small>")
+        src_network_http_get_e96b2e4a("http_get()<br/><small>src/network.cpp</small>")
+        src_network_cpp_src_network_98150b95("network.cpp")
+        src_network_wcb_5409c68c("wcb()<br/><small>src/network.cpp</small>")
+    end
+    src_network_cpp_string_176603ae("string")
+    src_chart_fetch_candles_a5d50d09("fetch_candles()<br/><small>src/chart.cpp</small>")
+    src_market_table_fetch_pairs_af0c8ba4("fetch_pairs()<br/><small>src/market_table.cpp</small>")
+    src_orderbook_fetch_orderbook_1768fd40("fetch_orderbook()<br/><small>src/orderbook.cpp</small>")
+    src_trades_fetch_trades_d0fb693b("fetch_trades()<br/><small>src/trades.cpp</small>")
+    src_network_telegram_send_6cc4aac7 -->|calls| src_network_http_post_ced5415a
+    src_chart_fetch_candles_a5d50d09 -->|calls| src_network_http_get_e96b2e4a
+    src_market_table_fetch_pairs_af0c8ba4 -->|calls| src_network_http_get_e96b2e4a
+    src_orderbook_fetch_orderbook_1768fd40 -->|calls| src_network_http_get_e96b2e4a
+    src_trades_fetch_trades_d0fb693b -->|calls| src_network_http_get_e96b2e4a
+    class src_network_telegram_send_6cc4aac7 function;
+    class src_network_http_post_ced5415a function;
+    class src_network_http_get_e96b2e4a function;
+    class src_network_cpp_src_network_98150b95 function;
+    class src_network_wcb_5409c68c function;
+    class src_network_cpp_string_176603ae function;
+    class src_chart_fetch_candles_a5d50d09 function;
+    class src_market_table_fetch_pairs_af0c8ba4 function;
+    class src_orderbook_fetch_orderbook_1768fd40 function;
+    class src_trades_fetch_trades_d0fb693b function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>fetch_candles()</code><br><small style="color:var(--muted)">src/chart.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>http_get()</code><br><small style="color:var(--muted)">src/network.cpp</small></td>
+  <td>fetch_candles() node in src/chart.cpp.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>fetch_pairs()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>http_get()</code><br><small style="color:var(--muted)">src/network.cpp</small></td>
+  <td>fetch_pairs() node in src/market_table.cpp.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>http_get()</code><br><small style="color:var(--muted)">src/network.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>fetch_candles()</code><br><small style="color:var(--muted)">src/chart.cpp</small><br><code>fetch_orderbook()</code><br><small style="color:var(--muted)">src/orderbook.cpp</small><br><code>fetch_pairs()</code><br><small style="color:var(--muted)">src/market_table.cpp</small><br>+1 more</td>
+  <td>No direct outbound edge</td>
+  <td>http_get() node in src/network.cpp.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>http_post()</code><br><small style="color:var(--muted)">src/network.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>telegram_send()</code><br><small style="color:var(--muted)">src/network.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>http_post() node in src/network.cpp.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>telegram_send()</code><br><small style="color:var(--muted)">src/network.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>alerts_engine()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><code>http_post()</code><br><small style="color:var(--muted)">src/network.cpp</small></td>
+  <td>telegram_send() node in src/network.cpp.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>wcb()</code><br><small style="color:var(--muted)">src/network.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>wcb() node in src/network.cpp.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>fetch_orderbook()</code><br><small style="color:var(--muted)">src/orderbook.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>http_get()</code><br><small style="color:var(--muted)">src/network.cpp</small></td>
+  <td>fetch_orderbook() node in src/orderbook.cpp.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>fetch_trades()</code><br><small style="color:var(--muted)">src/trades.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>http_get()</code><br><small style="color:var(--muted)">src/network.cpp</small></td>
+  <td>fetch_trades() node in src/trades.cpp.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>network.cpp</code><br><small style="color:var(--muted)">src/network.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>network.hpp</code><br><small style="color:var(--muted)">src/network.hpp</small></td>
+  <td>network.cpp node in src/network.cpp.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>string</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>string node in project.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>src/network.cpp</code></td><td>5 nodes</td></tr>
+<tr><td><code>src/chart.cpp</code></td><td>1 nodes</td></tr>
+<tr><td><code>src/market_table.cpp</code></td><td>1 nodes</td></tr>
+<tr><td><code>src/orderbook.cpp</code></td><td>1 nodes</td></tr>
+<tr><td><code>src/trades.cpp</code></td><td>1 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: calls x5, contains x4, references x3. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 4. Serving API ====== -->
+<h2 id="serve-api">4. Serving API</h2>
+<p>Serving API groups implementation around market, tablecpp, hit, alertscpp, mostly in src/market_table.cpp, src/alerts.cpp, src/right_panel.cpp. This section covers 38 nodes and 75 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Serving API (38 nodes, 75 edges)
+    subgraph serve_api_src_market_table_cpp_c3629200["src/market_table.cpp"]
+        src_market_table_hit_table_row_e43ddbcb("hit_table_row()<br/><small>src/market_table.cpp</small>")
+        src_market_table_get_sorted_filtered_pairs_4a9faeec("get_sorted_filtered_pairs()<br/><small>src/market_table.cpp</small>")
+        src_market_table_hit_col_header_f36c63b4("hit_col_header()<br/><small>src/market_table.cpp</small>")
+        src_market_table_str_contains_ci_13b41047("str_contains_ci()<br/><small>src/market_table.cpp</small>")
+        src_market_table_sort_pairs_8453cea4("sort_pairs()<br/><small>src/market_table.cpp</small>")
+        src_market_table_cs_base_4bee3649("cs_base()<br/><small>src/market_table.cpp</small>")
+        src_market_table_hit_fav_star_10830711("hit_fav_star()<br/><small>src/market_table.cpp</small>")
+        src_market_table_row_y_start_bc2f112c("row_y_start()<br/><small>src/market_table.cpp</small>")
+        src_market_table_visible_rows_h_7f24c9f3("visible_rows_h()<br/><small>src/market_table.cpp</small>")
+        src_market_table_max_rows_count_dfde289f("max_rows_count()<br/><small>src/market_table.cpp</small>")
+    end
+    subgraph serve_api_src_alerts_cpp_8ad0a543["src/alerts.cpp"]
+        src_alerts_handle_alert_modal_click_88d3ae25("handle_alert_modal_click()<br/><small>src/alerts.cpp</small>")
+        src_alerts_update_alert_modal_cursor_3e368f93("update_alert_modal_cursor()<br/><small>src/alerts.cpp</small>")
+        src_alerts_get_modal_layout_024b2f1c("get_modal_layout()<br/><small>src/alerts.cpp</small>")
+        src_alerts_hit_alert_del_btn_f94bf89e("hit_alert_del_btn()<br/><small>src/alerts.cpp</small>")
+        src_alerts_hit_alert_row_f7c076aa("hit_alert_row()<br/><small>src/alerts.cpp</small>")
+        src_alerts_hit_alert_toggle_btn_d96a15bd("hit_alert_toggle_btn()<br/><small>src/alerts.cpp</small>")
+    end
+    src_main_sdl_appevent_093024e9("SDL_AppEvent()<br/><small>src/main.cpp</small>")
+    src_ui_utils_point_in_59dee501("point_in()<br/><small>src/ui_utils.cpp</small>")
+    src_alerts_handle_alert_modal_click_88d3ae25 -->|calls| src_alerts_get_modal_layout_024b2f1c
+    src_alerts_update_alert_modal_cursor_3e368f93 -->|calls| src_alerts_get_modal_layout_024b2f1c
+    src_market_table_get_sorted_filtered_pairs_4a9faeec -->|calls| src_market_table_str_contains_ci_13b41047
+    src_market_table_get_sorted_filtered_pairs_4a9faeec -->|calls| src_market_table_sort_pairs_8453cea4
+    src_market_table_hit_col_header_f36c63b4 -->|calls| src_market_table_cs_base_4bee3649
+    src_market_table_hit_fav_star_10830711 -->|calls| src_market_table_row_y_start_bc2f112c
+    src_market_table_hit_table_row_e43ddbcb -->|calls| src_market_table_row_y_start_bc2f112c
+    src_market_table_hit_table_row_e43ddbcb -->|calls| src_market_table_visible_rows_h_7f24c9f3
+    src_market_table_hit_table_row_e43ddbcb -->|calls| src_market_table_max_rows_count_dfde289f
+    src_market_table_max_rows_count_dfde289f -->|calls| src_market_table_visible_rows_h_7f24c9f3
+    src_market_table_visible_rows_h_7f24c9f3 -->|calls| src_market_table_row_y_start_bc2f112c
+    src_alerts_handle_alert_modal_click_88d3ae25 -->|calls| src_ui_utils_point_in_59dee501
+    src_alerts_hit_alert_del_btn_f94bf89e -->|calls| src_ui_utils_point_in_59dee501
+    src_alerts_hit_alert_row_f7c076aa -->|calls| src_ui_utils_point_in_59dee501
+    src_alerts_hit_alert_toggle_btn_d96a15bd -->|calls| src_ui_utils_point_in_59dee501
+    src_alerts_update_alert_modal_cursor_3e368f93 -->|calls| src_ui_utils_point_in_59dee501
+    src_main_sdl_appevent_093024e9 -->|calls| src_ui_utils_point_in_59dee501
+    src_main_sdl_appevent_093024e9 -->|calls| src_alerts_handle_alert_modal_click_88d3ae25
+    src_main_sdl_appevent_093024e9 -->|calls| src_alerts_hit_alert_row_f7c076aa
+    src_main_sdl_appevent_093024e9 -->|calls| src_alerts_hit_alert_del_btn_f94bf89e
+    src_main_sdl_appevent_093024e9 -->|calls| src_alerts_hit_alert_toggle_btn_d96a15bd
+    src_main_sdl_appevent_093024e9 -->|calls| src_market_table_hit_col_header_f36c63b4
+    src_main_sdl_appevent_093024e9 -->|calls| src_market_table_get_sorted_filtered_pairs_4a9faeec
+    src_main_sdl_appevent_093024e9 -->|calls| src_market_table_hit_table_row_e43ddbcb
+    %% Omitted for readability: 20 nodes, 5 edges
+    class src_market_table_hit_table_row_e43ddbcb function;
+    class src_market_table_get_sorted_filtered_pairs_4a9faeec function;
+    class src_market_table_hit_col_header_f36c63b4 function;
+    class src_market_table_str_contains_ci_13b41047 function;
+    class src_market_table_sort_pairs_8453cea4 function;
+    class src_market_table_cs_base_4bee3649 function;
+    class src_market_table_hit_fav_star_10830711 function;
+    class src_market_table_row_y_start_bc2f112c function;
+    class src_market_table_visible_rows_h_7f24c9f3 function;
+    class src_market_table_max_rows_count_dfde289f function;
+    class src_alerts_handle_alert_modal_click_88d3ae25 entry;
+    class src_alerts_update_alert_modal_cursor_3e368f93 function;
+    class src_alerts_get_modal_layout_024b2f1c function;
+    class src_alerts_hit_alert_del_btn_f94bf89e function;
+    class src_alerts_hit_alert_row_f7c076aa function;
+    class src_alerts_hit_alert_toggle_btn_d96a15bd function;
+    class src_main_sdl_appevent_093024e9 function;
+    class src_ui_utils_point_in_59dee501 function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>ColDef</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>ColDef node in src/market_table.cpp.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>alert_freq_label()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_alerts()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>alert_freq_label() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>get_modal_layout()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>handle_alert_modal_click()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>update_alert_modal_cursor()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>get_modal_layout() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>handle_alert_modal_click()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-cmd">Entry</span></td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>get_modal_layout()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>point_in()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>handle_alert_modal_click() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>hit_alert_del_btn()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>point_in()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>hit_alert_del_btn() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>hit_alert_row()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>point_in()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>hit_alert_row() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>hit_alert_toggle_btn()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>point_in()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>hit_alert_toggle_btn() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>hit_alerts_add_button()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>point_in()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>hit_alerts_add_button() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>update_alert_modal_cursor()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>get_modal_layout()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>point_in()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>update_alert_modal_cursor() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>alerts_new_id()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>alerts_save()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>fav_save()</code><br><small style="color:var(--muted)">src/favorites.cpp</small><br>+20 more</td>
+  <td>SDL_AppEvent() node in src/main.cpp.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>cs_base()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_table()</code><br><small style="color:var(--muted)">src/market_table.cpp</small><br><code>hit_col_header()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>cs_base() node in src/market_table.cpp.</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td><code>get_sorted_filtered_pairs()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_table()</code><br><small style="color:var(--muted)">src/market_table.cpp</small><br><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>fav_has()</code><br><small style="color:var(--muted)">src/favorites.cpp</small><br><code>sort_pairs()</code><br><small style="color:var(--muted)">src/market_table.cpp</small><br><code>str_contains_ci()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td>get_sorted_filtered_pairs() node in src/market_table.cpp.</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>hit_col_header()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>cs_base()</code><br><small style="color:var(--muted)">src/market_table.cpp</small><br><code>point_in()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>hit_col_header() node in src/market_table.cpp.</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>hit_fav_star()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>point_in()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>row_y_start()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td>hit_fav_star() node in src/market_table.cpp.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>hit_search_bar()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>point_in()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>hit_search_bar() node in src/market_table.cpp.</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td><code>hit_tab()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>point_in()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>hit_tab() node in src/market_table.cpp.</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td><code>hit_table_row()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>max_rows_count()</code><br><small style="color:var(--muted)">src/market_table.cpp</small><br><code>point_in()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small><br><code>row_y_start()</code><br><small style="color:var(--muted)">src/market_table.cpp</small><br>+1 more</td>
+  <td>hit_table_row() node in src/market_table.cpp.</td>
+</tr>
+<tr>
+  <td>18</td>
+  <td><code>hit_theme_button()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>point_in()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>hit_theme_button() node in src/market_table.cpp.</td>
+</tr>
+<tr>
+  <td>19</td>
+  <td><code>max_rows_count()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_table()</code><br><small style="color:var(--muted)">src/market_table.cpp</small><br><code>hit_table_row()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><code>visible_rows_h()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td>max_rows_count() node in src/market_table.cpp.</td>
+</tr>
+<tr>
+  <td>20</td>
+  <td><code>row_y_start()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_table()</code><br><small style="color:var(--muted)">src/market_table.cpp</small><br><code>hit_fav_star()</code><br><small style="color:var(--muted)">src/market_table.cpp</small><br><code>hit_table_row()</code><br><small style="color:var(--muted)">src/market_table.cpp</small><br>+1 more</td>
+  <td>No direct outbound edge</td>
+  <td>row_y_start() node in src/market_table.cpp.</td>
+</tr>
+<tr>
+  <td>21</td>
+  <td><code>sort_pairs()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>get_sorted_filtered_pairs()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>sort_pairs() node in src/market_table.cpp.</td>
+</tr>
+<tr>
+  <td>22</td>
+  <td><code>str_contains_ci()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>get_sorted_filtered_pairs()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>str_contains_ci() node in src/market_table.cpp.</td>
+</tr>
+<tr>
+  <td>23</td>
+  <td><code>visible_rows_h()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_table()</code><br><small style="color:var(--muted)">src/market_table.cpp</small><br><code>hit_table_row()</code><br><small style="color:var(--muted)">src/market_table.cpp</small><br><code>max_rows_count()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><code>row_y_start()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td>visible_rows_h() node in src/market_table.cpp.</td>
+</tr>
+<tr>
+  <td>24</td>
+  <td><code>hit_right_tab()</code><br><small style="color:var(--muted)">src/right_panel.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>point_in()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td>hit_right_tab() node in src/right_panel.cpp.</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td><code>right_panel_content_rect()</code><br><small style="color:var(--muted)">src/right_panel.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_right_panel()</code><br><small style="color:var(--muted)">src/right_panel.cpp</small><br><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>right_panel_content_rect() node in src/right_panel.cpp.</td>
+</tr>
+<tr>
+  <td>26</td>
+  <td><code>point_in()</code><br><small style="color:var(--muted)">src/ui_utils.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_chart()</code><br><small style="color:var(--muted)">src/chart.cpp</small><br><code>handle_alert_modal_click()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>hit_alert_del_btn()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br>+13 more</td>
+  <td>No direct outbound edge</td>
+  <td>point_in() node in src/ui_utils.cpp.</td>
+</tr>
+<tr>
+  <td>27</td>
+  <td><code>SDL_Event</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>SDL_Event node in project.</td>
+</tr>
+<tr>
+  <td>28</td>
+  <td><code>AlertFrequency</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>AlertFrequency node in project.</td>
+</tr>
+<tr>
+  <td>29</td>
+  <td><code>alerts.cpp</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>alerts.hpp</code><br><small style="color:var(--muted)">src/alerts.hpp</small><br><code>constants.hpp</code><br><small style="color:var(--muted)">src/constants.hpp</small><br><code>network.hpp</code><br><small style="color:var(--muted)">src/network.hpp</small><br>+2 more</td>
+  <td>alerts.cpp node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>30</td>
+  <td><code>label</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>label node in src/market_table.cpp.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>src/market_table.cpp</code></td><td>19 nodes</td></tr>
+<tr><td><code>src/alerts.cpp</code></td><td>9 nodes</td></tr>
+<tr><td><code>src/right_panel.cpp</code></td><td>2 nodes</td></tr>
+<tr><td><code>src/main.cpp</code></td><td>1 nodes</td></tr>
+<tr><td><code>src/ui_utils.cpp</code></td><td>1 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: calls x40, contains x22, references x9, defines x4. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 5. App State & Core Models ====== -->
+<h2 id="app-state-core-models">5. App State &amp; Core Models</h2>
+<p>App State &amp; Core Models groups implementation around app, statehpp, drag, cursor, mostly in src/app_state.hpp. This section covers 86 nodes and 85 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: App State &amp; Core Models (86 nodes, 85 edges)
+    src_app_state_appstate_f0c7f36a("AppState<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_active_tool_10ae4184("active_tool<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_drawings_c9af7d83("drawings<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_drawing_in_progress_12091f41("drawing_in_progress<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_current_drawing_9137897a("current_drawing<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_hover_price_c002e9af("hover_price<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_hover_time_224f2729("hover_time<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_pairs_spot_5113dcba("pairs_spot<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_pairs_futures_b627d55d("pairs_futures<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_pairs_mtx_56dcdf25("pairs_mtx<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_pairs_dirty_79e3fd77("pairs_dirty<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_active_tab_c12bff7d("active_tab<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_sort_col_cae88315("sort_col<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_sort_dir_f30437a8("sort_dir<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_table_scroll_afe25965("table_scroll<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_table_hover_bf8895fa("table_hover<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_search_7720ff59("search<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_right_tab_5c739343("right_tab<br/><small>src/app_state.hpp</small>")
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_active_tool_10ae4184
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_drawings_c9af7d83
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_drawing_in_progress_12091f41
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_current_drawing_9137897a
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_hover_price_c002e9af
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_hover_time_224f2729
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_pairs_spot_5113dcba
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_pairs_futures_b627d55d
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_pairs_mtx_56dcdf25
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_pairs_dirty_79e3fd77
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_active_tab_c12bff7d
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_sort_col_cae88315
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_sort_dir_f30437a8
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_table_scroll_afe25965
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_table_hover_bf8895fa
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_search_7720ff59
+    src_app_state_appstate_f0c7f36a -->|defines| src_app_state_appstate_right_tab_5c739343
+    %% Omitted for readability: 68 nodes, 0 edges
+    class src_app_state_appstate_f0c7f36a klass;
+    class src_app_state_appstate_active_tool_10ae4184 function;
+    class src_app_state_appstate_drawings_c9af7d83 function;
+    class src_app_state_appstate_drawing_in_progress_12091f41 function;
+    class src_app_state_appstate_current_drawing_9137897a function;
+    class src_app_state_appstate_hover_price_c002e9af function;
+    class src_app_state_appstate_hover_time_224f2729 function;
+    class src_app_state_appstate_pairs_spot_5113dcba function;
+    class src_app_state_appstate_pairs_futures_b627d55d function;
+    class src_app_state_appstate_pairs_mtx_56dcdf25 function;
+    class src_app_state_appstate_pairs_dirty_79e3fd77 function;
+    class src_app_state_appstate_active_tab_c12bff7d function;
+    class src_app_state_appstate_sort_col_cae88315 function;
+    class src_app_state_appstate_sort_dir_f30437a8 function;
+    class src_app_state_appstate_table_scroll_afe25965 function;
+    class src_app_state_appstate_table_hover_bf8895fa function;
+    class src_app_state_appstate_search_7720ff59 function;
+    class src_app_state_appstate_right_tab_5c739343 function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>AppState</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>AppState node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>MarketTab</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>MarketTab node in project.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>RightTab</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>RightTab node in project.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>SDL_Cursor</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>SDL_Cursor node in project.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>SDL_Window</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>SDL_Window node in project.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>active_tab</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>active_tab node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>active_tool</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>active_tool node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>alert_modal_draft</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>alert_modal_draft node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>alert_modal_is_new</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>alert_modal_is_new node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>alert_modal_open</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>alert_modal_open node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>alerts</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>alerts node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td><code>alerts_mtx</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>alerts_mtx node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>alerts_thread</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>alerts_thread node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>auto_scale</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>auto_scale node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>candle_thread</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>candle_thread node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td><code>candles</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>candles node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td><code>candles_dirty</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>candles_dirty node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>18</td>
+  <td><code>candles_mtx</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>candles_mtx node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>19</td>
+  <td><code>chart_dragging</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Supports retrieval-augmented Q&amp;A or streaming chat.</td>
+</tr>
+<tr>
+  <td>20</td>
+  <td><code>chart_symbol</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>chart_symbol node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>21</td>
+  <td><code>current_drawing</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>current_drawing node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>22</td>
+  <td><code>cursor_arrow</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>cursor_arrow node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>23</td>
+  <td><code>cursor_cross</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>cursor_cross node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>24</td>
+  <td><code>cursor_hand</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>cursor_hand node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td><code>cursor_move</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>cursor_move node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>26</td>
+  <td><code>cursor_resize_ew</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>cursor_resize_ew node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>27</td>
+  <td><code>cursor_resize_ns</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>cursor_resize_ns node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>28</td>
+  <td><code>drag_start_mx</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Supports retrieval-augmented Q&amp;A or streaming chat.</td>
+</tr>
+<tr>
+  <td>29</td>
+  <td><code>drag_start_my</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Supports retrieval-augmented Q&amp;A or streaming chat.</td>
+</tr>
+<tr>
+  <td>30</td>
+  <td><code>drag_start_offset</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Supports retrieval-augmented Q&amp;A or streaming chat.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>src/app_state.hpp</code></td><td>77 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: defines x76, references x9. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 6. Alerts Engine ====== -->
+<h2 id="alerts-engine">6. Alerts Engine</h2>
+<p>Alerts Engine groups implementation around typeshpp, alertscpp, alerts, 24h, mostly in src/types.hpp, src/alerts.cpp. This section covers 39 nodes and 44 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Alerts Engine (39 nodes, 44 edges)
+    subgraph alerts_engine_src_alerts_cpp_a69a9186["src/alerts.cpp"]
+        src_alerts_alerts_engine_a9a74ff8("alerts_engine()<br/><small>src/alerts.cpp</small>")
+        src_alerts_alerts_load_74f458c3("alerts_load()<br/><small>src/alerts.cpp</small>")
+        src_alerts_find_pair_32ad659a("find_pair()<br/><small>src/alerts.cpp</small>")
+        src_alerts_evaluate_alert_188d0936("evaluate_alert()<br/><small>src/alerts.cpp</small>")
+        src_alerts_alert_type_label_9ce2a80c("alert_type_label()<br/><small>src/alerts.cpp</small>")
+        src_alerts_alerts_new_id_dc4f017c("alerts_new_id()<br/><small>src/alerts.cpp</small>")
+        src_alerts_alerts_save_4c5977d0("alerts_save()<br/><small>src/alerts.cpp</small>")
+    end
+    subgraph alerts_engine_External_generated_2e4275e0["External / generated"]
+        src_types_hpp_alertfrequency_89e5d689("AlertFrequency")
+        src_alerts_cpp_alerttype_76c995d6("AlertType")
+        src_types_hpp_alerttype_6ebdabc3("AlertType")
+        src_alerts_cpp_string_aef56174("string")
+        src_types_hpp_string_3c8fdcfd("string")
+        src_alerts_cpp_vector_1fed4525("vector")
+    end
+    subgraph alerts_engine_src_types_hpp_274114f2["src/types.hpp"]
+        src_types_alert_0cb5da75("Alert<br/><small>src/types.hpp</small>")
+        src_types_pairinfo_ddb79999("PairInfo<br/><small>src/types.hpp</small>")
+        src_types_searchstate_f13fd5fe("SearchState<br/><small>src/types.hpp</small>")
+        src_types_pairinfo_base_asset_2a1b9e53("base_asset<br/><small>src/types.hpp</small>")
+        src_types_searchstate_caret_bb0d0c8c("caret<br/><small>src/types.hpp</small>")
+    end
+    src_alerts_alerts_engine_a9a74ff8 -->|calls| src_alerts_find_pair_32ad659a
+    src_alerts_alerts_engine_a9a74ff8 -->|calls| src_alerts_evaluate_alert_188d0936
+    src_alerts_alerts_engine_a9a74ff8 -->|calls| src_alerts_alert_type_label_9ce2a80c
+    src_alerts_alerts_load_74f458c3 -->|calls| src_alerts_alerts_new_id_dc4f017c
+    %% Omitted for readability: 21 nodes, 0 edges
+    class src_alerts_alerts_engine_a9a74ff8 function;
+    class src_alerts_alerts_load_74f458c3 function;
+    class src_alerts_find_pair_32ad659a function;
+    class src_alerts_evaluate_alert_188d0936 function;
+    class src_alerts_alert_type_label_9ce2a80c function;
+    class src_alerts_alerts_new_id_dc4f017c function;
+    class src_alerts_alerts_save_4c5977d0 function;
+    class src_types_hpp_alertfrequency_89e5d689 klass;
+    class src_alerts_cpp_alerttype_76c995d6 klass;
+    class src_types_hpp_alerttype_6ebdabc3 klass;
+    class src_alerts_cpp_string_aef56174 function;
+    class src_types_hpp_string_3c8fdcfd function;
+    class src_alerts_cpp_vector_1fed4525 function;
+    class src_types_alert_0cb5da75 klass;
+    class src_types_pairinfo_ddb79999 klass;
+    class src_types_searchstate_f13fd5fe klass;
+    class src_types_pairinfo_base_asset_2a1b9e53 async;
+    class src_types_searchstate_caret_bb0d0c8c function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>Alert</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Alert node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>PairInfo</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>PairInfo node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>SearchState</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>SearchState node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>alert_type_label()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>alerts_engine()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>draw_alerts()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>alert_type_label() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>alerts_engine()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>alert_type_label()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>evaluate_alert()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>find_pair()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br>+3 more</td>
+  <td>alerts_engine() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>alerts_load()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppInit()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>alerts_new_id()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td>alerts_load() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>alerts_new_id()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>alerts_load()</code><br><small style="color:var(--muted)">src/alerts.cpp</small><br><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>alerts_new_id() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>alerts_save()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small><br><code>SDL_AppQuit()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>alerts_save() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>evaluate_alert()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>alerts_engine()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>evaluate_alert() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>find_pair()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>alerts_engine()</code><br><small style="color:var(--muted)">src/alerts.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>find_pair() node in src/alerts.cpp.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>AlertType</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>AlertType node in project.</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td><code>string</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>string node in project.</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>vector</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>vector node in project.</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>enabled</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>enabled node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>frequency</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>frequency node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td><code>id</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>id node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td><code>note</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>note node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>18</td>
+  <td><code>symbol</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>symbol node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>19</td>
+  <td><code>tg_bot_token</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>tg_bot_token node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>20</td>
+  <td><code>tg_chat_id</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Supports retrieval-augmented Q&amp;A or streaming chat.</td>
+</tr>
+<tr>
+  <td>21</td>
+  <td><code>threshold</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>threshold node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>22</td>
+  <td><code>triggered</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>triggered node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>23</td>
+  <td><code>type</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>type node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>24</td>
+  <td><code>via_telegram</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>via_telegram node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td><code>AlertFrequency</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>AlertFrequency node in project.</td>
+</tr>
+<tr>
+  <td>26</td>
+  <td><code>AlertType</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>AlertType node in project.</td>
+</tr>
+<tr>
+  <td>27</td>
+  <td><code>string</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>string node in project.</td>
+</tr>
+<tr>
+  <td>28</td>
+  <td><code>base_asset</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-async">Async</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>base_asset node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>29</td>
+  <td><code>change_24h</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>change_24h node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>30</td>
+  <td><code>high_24h</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>high_24h node in src/types.hpp.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>src/types.hpp</code></td><td>26 nodes</td></tr>
+<tr><td><code>src/alerts.cpp</code></td><td>7 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: defines x23, references x17, calls x4. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 7. UI Theming ====== -->
+<h2 id="ui-theming">7. UI Theming</h2>
+<p>UI Theming groups implementation around themehpp, themecpp, theme, text, mostly in src/theme.hpp, src/theme.cpp. This section covers 39 nodes and 44 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: UI Theming (39 nodes, 44 edges)
+    subgraph ui_theming_src_theme_hpp_622cdd08["src/theme.hpp"]
+        src_theme_themecolors_2e062151("ThemeColors<br/><small>src/theme.hpp</small>")
+        src_theme_themecolors_accent_4560e42a("accent<br/><small>src/theme.hpp</small>")
+        src_theme_themecolors_alert_trigger_f562dca8("alert_trigger<br/><small>src/theme.hpp</small>")
+        src_theme_themecolors_bear_83448b42("bear<br/><small>src/theme.hpp</small>")
+        src_theme_themecolors_bg_btn_active_554d054e("bg_btn_active<br/><small>src/theme.hpp</small>")
+        src_theme_themecolors_bg_btn_idle_482ccb4a("bg_btn_idle<br/><small>src/theme.hpp</small>")
+        src_theme_themecolors_bg_header_76d73a88("bg_header<br/><small>src/theme.hpp</small>")
+        src_theme_themecolors_bg_input_7ee4b69d("bg_input<br/><small>src/theme.hpp</small>")
+        src_theme_themecolors_bg_input_focused_674d4cdb("bg_input_focused<br/><small>src/theme.hpp</small>")
+        src_theme_themecolors_bg_panel_b3a45d18("bg_panel<br/><small>src/theme.hpp</small>")
+    end
+    subgraph ui_theming_src_theme_cpp_4844b0d5["src/theme.cpp"]
+        src_theme_get_theme_2ef238ae("get_theme()<br/><small>src/theme.cpp</small>")
+        src_theme_light_theme_5bb8a600("light_theme()<br/><small>src/theme.cpp</small>")
+        src_theme_dark_theme_6dac426d("dark_theme()<br/><small>src/theme.cpp</small>")
+        src_theme_cpp_src_theme_aeea55bb("theme.cpp")
+        src_theme_theme_label_076525ba("theme_label()<br/><small>src/theme.cpp</small>")
+        src_theme_theme_next_6297da53("theme_next()<br/><small>src/theme.cpp</small>")
+    end
+    subgraph ui_theming_External_generated_a1be8a24["External / generated"]
+        src_theme_hpp_sdl_color_c4c1ce3a("SDL_Color")
+        src_theme_cpp_theme_9df4ca96("Theme")
+    end
+    src_theme_get_theme_2ef238ae -->|calls| src_theme_light_theme_5bb8a600
+    src_theme_get_theme_2ef238ae -->|calls| src_theme_dark_theme_6dac426d
+    %% Omitted for readability: 21 nodes, 0 edges
+    class src_theme_themecolors_2e062151 klass;
+    class src_theme_themecolors_accent_4560e42a function;
+    class src_theme_themecolors_alert_trigger_f562dca8 function;
+    class src_theme_themecolors_bear_83448b42 function;
+    class src_theme_themecolors_bg_btn_active_554d054e function;
+    class src_theme_themecolors_bg_btn_idle_482ccb4a function;
+    class src_theme_themecolors_bg_header_76d73a88 function;
+    class src_theme_themecolors_bg_input_7ee4b69d function;
+    class src_theme_themecolors_bg_input_focused_674d4cdb function;
+    class src_theme_themecolors_bg_panel_b3a45d18 function;
+    class src_theme_get_theme_2ef238ae function;
+    class src_theme_light_theme_5bb8a600 function;
+    class src_theme_dark_theme_6dac426d function;
+    class src_theme_cpp_src_theme_aeea55bb function;
+    class src_theme_theme_label_076525ba function;
+    class src_theme_theme_next_6297da53 function;
+    class src_theme_hpp_sdl_color_c4c1ce3a klass;
+    class src_theme_cpp_theme_9df4ca96 klass;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>ThemeColors</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>ThemeColors node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>dark_theme()</code><br><small style="color:var(--muted)">src/theme.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>get_theme()</code><br><small style="color:var(--muted)">src/theme.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>dark_theme() node in src/theme.cpp.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>get_theme()</code><br><small style="color:var(--muted)">src/theme.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small><br><code>SDL_AppInit()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td><code>dark_theme()</code><br><small style="color:var(--muted)">src/theme.cpp</small><br><code>light_theme()</code><br><small style="color:var(--muted)">src/theme.cpp</small></td>
+  <td>get_theme() node in src/theme.cpp.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>light_theme()</code><br><small style="color:var(--muted)">src/theme.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>get_theme()</code><br><small style="color:var(--muted)">src/theme.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>light_theme() node in src/theme.cpp.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>theme_label()</code><br><small style="color:var(--muted)">src/theme.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>draw_table()</code><br><small style="color:var(--muted)">src/market_table.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>theme_label() node in src/theme.cpp.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>theme_next()</code><br><small style="color:var(--muted)">src/theme.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SDL_AppEvent()</code><br><small style="color:var(--muted)">src/main.cpp</small></td>
+  <td>No direct outbound edge</td>
+  <td>theme_next() node in src/theme.cpp.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>theme.cpp</code><br><small style="color:var(--muted)">src/theme.cpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>string</code><br><code>theme.hpp</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td>theme.cpp node in src/theme.cpp.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>Theme</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Theme node in project.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>SDL_Color</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>SDL_Color node in project.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>accent</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>accent node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>alert_trigger</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>alert_trigger node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td><code>bear</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>bear node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>bg_btn_active</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>bg_btn_active node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>bg_btn_idle</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>bg_btn_idle node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>bg_header</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>bg_header node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td><code>bg_input</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>bg_input node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td><code>bg_input_focused</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>bg_input_focused node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>18</td>
+  <td><code>bg_panel</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>bg_panel node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>19</td>
+  <td><code>bg_row_even</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>bg_row_even node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>20</td>
+  <td><code>bg_row_hover</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>bg_row_hover node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>21</td>
+  <td><code>bg_row_odd</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>bg_row_odd node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>22</td>
+  <td><code>bg_row_sel</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>bg_row_sel node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>23</td>
+  <td><code>bg_tab_active</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>bg_tab_active node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>24</td>
+  <td><code>bg_tab_idle</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>bg_tab_idle node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td><code>bg_window</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>bg_window node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>26</td>
+  <td><code>border</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>border node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>27</td>
+  <td><code>border_accent</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>border_accent node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>28</td>
+  <td><code>bull</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>bull node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>29</td>
+  <td><code>grid</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>grid node in src/theme.hpp.</td>
+</tr>
+<tr>
+  <td>30</td>
+  <td><code>notification_bg</code><br><small style="color:var(--muted)">src/theme.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>notification_bg node in src/theme.hpp.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>src/theme.hpp</code></td><td>31 nodes</td></tr>
+<tr><td><code>src/theme.cpp</code></td><td>6 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: defines x30, references x7, contains x5, calls x2. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 8. App Layout Dimensions ====== -->
+<h2 id="app-layout-dimensions">8. App Layout Dimensions</h2>
+<p>App Layout Dimensions groups implementation around app, statehpp, chart, right, mostly in src/app_state.hpp. This section covers 21 nodes and 20 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: App Layout Dimensions (21 nodes, 20 edges)
+    src_app_state_applayout_71713884("AppLayout<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_win_w_6314fd82("win_w<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_win_h_0f7b8be9("win_h<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_split_ratio_16ad6712("split_ratio<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_vsplit_ratio_3fb1ff6a("vsplit_ratio<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_chart_x_3670a099("chart_x<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_chart_y_3b74f4d1("chart_y<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_chart_w_33c763d4("chart_w<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_chart_h_1fe07a8e("chart_h<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_toolbox_x_434afa39("toolbox_x<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_toolbox_y_d1b84f0c("toolbox_y<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_toolbox_w_d8e95e21("TOOLBOX_W<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_toolbox_h_a13ce947("toolbox_h<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_table_x_7839adeb("table_x<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_table_y_fa17401e("table_y<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_table_w_d2ba0d44("table_w<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_table_h_9f03ddf3("table_h<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_right_tabs_x_d2b3b273("right_tabs_x<br/><small>src/app_state.hpp</small>")
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_win_w_6314fd82
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_win_h_0f7b8be9
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_split_ratio_16ad6712
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_vsplit_ratio_3fb1ff6a
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_chart_x_3670a099
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_chart_y_3b74f4d1
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_chart_w_33c763d4
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_chart_h_1fe07a8e
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_toolbox_x_434afa39
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_toolbox_y_d1b84f0c
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_toolbox_w_d8e95e21
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_toolbox_h_a13ce947
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_table_x_7839adeb
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_table_y_fa17401e
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_table_w_d2ba0d44
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_table_h_9f03ddf3
+    src_app_state_applayout_71713884 -->|defines| src_app_state_applayout_right_tabs_x_d2b3b273
+    %% Omitted for readability: 3 nodes, 0 edges
+    class src_app_state_applayout_71713884 klass;
+    class src_app_state_applayout_win_w_6314fd82 function;
+    class src_app_state_applayout_win_h_0f7b8be9 function;
+    class src_app_state_applayout_split_ratio_16ad6712 function;
+    class src_app_state_applayout_vsplit_ratio_3fb1ff6a function;
+    class src_app_state_applayout_chart_x_3670a099 function;
+    class src_app_state_applayout_chart_y_3b74f4d1 function;
+    class src_app_state_applayout_chart_w_33c763d4 function;
+    class src_app_state_applayout_chart_h_1fe07a8e function;
+    class src_app_state_applayout_toolbox_x_434afa39 function;
+    class src_app_state_applayout_toolbox_y_d1b84f0c function;
+    class src_app_state_applayout_toolbox_w_d8e95e21 klass;
+    class src_app_state_applayout_toolbox_h_a13ce947 function;
+    class src_app_state_applayout_table_x_7839adeb function;
+    class src_app_state_applayout_table_y_fa17401e function;
+    class src_app_state_applayout_table_w_d2ba0d44 function;
+    class src_app_state_applayout_table_h_9f03ddf3 function;
+    class src_app_state_applayout_right_tabs_x_d2b3b273 function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>AppLayout</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>AppLayout node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>chart_h</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>chart_h node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>chart_w</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>chart_w node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>chart_x</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>chart_x node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>chart_y</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>chart_y node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>right_tabs_h</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>right_tabs_h node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>right_tabs_w</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>right_tabs_w node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>right_tabs_x</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>right_tabs_x node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>right_tabs_y</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>right_tabs_y node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>split_ratio</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>split_ratio node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>table_h</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>table_h node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td><code>table_w</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>table_w node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>table_x</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>table_x node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>table_y</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>table_y node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>toolbox_h</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>toolbox_h node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td><code>TOOLBOX_W</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>TOOLBOX_W node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td><code>toolbox_x</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>toolbox_x node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>18</td>
+  <td><code>toolbox_y</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>toolbox_y node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>19</td>
+  <td><code>vsplit_ratio</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>vsplit_ratio node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>20</td>
+  <td><code>win_h</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>win_h node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>21</td>
+  <td><code>win_w</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>win_w node in src/app_state.hpp.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>src/app_state.hpp</code></td><td>21 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: defines x20. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 9. Order Book Model ====== -->
+<h2 id="order-book-model">9. Order Book Model</h2>
+<p>Order Book Model groups implementation around typeshpp, obentry, orderbook, mutex, mostly in src/types.hpp. This section covers 9 nodes and 8 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Order Book Model (9 nodes, 8 edges)
+    subgraph order_book_model_src_types_hpp_ee00c8e2["src/types.hpp"]
+        src_types_orderbook_cac907eb("OrderBook<br/><small>src/types.hpp</small>")
+        src_types_obentry_45dfd480("OBEntry<br/><small>src/types.hpp</small>")
+        src_types_obentry_price_2f5831f4("price<br/><small>src/types.hpp</small>")
+        src_types_obentry_qty_0b409c4a("qty<br/><small>src/types.hpp</small>")
+        src_types_orderbook_asks_9c6fb32e("asks<br/><small>src/types.hpp</small>")
+        src_types_orderbook_bids_bda519c4("bids<br/><small>src/types.hpp</small>")
+        src_types_orderbook_mtx_d3309402("mtx<br/><small>src/types.hpp</small>")
+    end
+    subgraph order_book_model_External_generated_29e4c302["External / generated"]
+        src_types_hpp_vector_cbc708f4("vector")
+        src_types_hpp_mutex_34f9b93c("mutex")
+    end
+    src_types_obentry_45dfd480 -->|defines| src_types_obentry_price_2f5831f4
+    src_types_obentry_45dfd480 -->|defines| src_types_obentry_qty_0b409c4a
+    src_types_orderbook_cac907eb -->|defines| src_types_orderbook_asks_9c6fb32e
+    src_types_orderbook_cac907eb -->|defines| src_types_orderbook_bids_bda519c4
+    src_types_orderbook_cac907eb -->|defines| src_types_orderbook_mtx_d3309402
+    src_types_orderbook_cac907eb -->|references| src_types_hpp_vector_cbc708f4
+    src_types_orderbook_cac907eb -->|references| src_types_hpp_mutex_34f9b93c
+    src_types_orderbook_cac907eb -->|references| src_types_obentry_45dfd480
+    class src_types_orderbook_cac907eb klass;
+    class src_types_obentry_45dfd480 klass;
+    class src_types_obentry_price_2f5831f4 function;
+    class src_types_obentry_qty_0b409c4a function;
+    class src_types_orderbook_asks_9c6fb32e function;
+    class src_types_orderbook_bids_bda519c4 function;
+    class src_types_orderbook_mtx_d3309402 function;
+    class src_types_hpp_vector_cbc708f4 function;
+    class src_types_hpp_mutex_34f9b93c function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>OBEntry</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>OBEntry node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>OrderBook</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>OrderBook node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>mutex</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>mutex node in project.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>vector</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>vector node in project.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>price</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>price node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>qty</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>qty node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>asks</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>asks node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>bids</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>bids node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>mtx</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>mtx node in src/types.hpp.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>src/types.hpp</code></td><td>7 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: defines x5, references x3. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 10. Chart Drawings ====== -->
+<h2 id="chart-drawings">10. Chart Drawings</h2>
+<p>Chart Drawings groups implementation around app, statehpp, tool, chartdrawing, mostly in src/app_state.hpp. This section covers 8 nodes and 7 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Chart Drawings (8 nodes, 7 edges)
+    subgraph chart_drawings_src_app_state_hpp_708c6933["src/app_state.hpp"]
+        src_app_state_chartdrawing_5323a784("ChartDrawing<br/><small>src/app_state.hpp</small>")
+        src_app_state_chartdrawing_tool_440f3f3c("tool<br/><small>src/app_state.hpp</small>")
+        src_app_state_chartdrawing_t1_03e5a501("t1<br/><small>src/app_state.hpp</small>")
+        src_app_state_chartdrawing_p1_30e61dd2("p1<br/><small>src/app_state.hpp</small>")
+        src_app_state_chartdrawing_t2_bca0faa2("t2<br/><small>src/app_state.hpp</small>")
+        src_app_state_chartdrawing_p2_9f04b8ed("p2<br/><small>src/app_state.hpp</small>")
+        src_app_state_chartdrawing_text_5a27e22a("text<br/><small>src/app_state.hpp</small>")
+    end
+    tool_1937c4c2("Tool")
+    src_app_state_chartdrawing_5323a784 -->|defines| src_app_state_chartdrawing_tool_440f3f3c
+    src_app_state_chartdrawing_5323a784 -->|defines| src_app_state_chartdrawing_t1_03e5a501
+    src_app_state_chartdrawing_5323a784 -->|defines| src_app_state_chartdrawing_p1_30e61dd2
+    src_app_state_chartdrawing_5323a784 -->|defines| src_app_state_chartdrawing_t2_bca0faa2
+    src_app_state_chartdrawing_5323a784 -->|defines| src_app_state_chartdrawing_p2_9f04b8ed
+    src_app_state_chartdrawing_5323a784 -->|defines| src_app_state_chartdrawing_text_5a27e22a
+    src_app_state_chartdrawing_5323a784 -->|references| tool_1937c4c2
+    class src_app_state_chartdrawing_5323a784 klass;
+    class src_app_state_chartdrawing_tool_440f3f3c function;
+    class src_app_state_chartdrawing_t1_03e5a501 function;
+    class src_app_state_chartdrawing_p1_30e61dd2 function;
+    class src_app_state_chartdrawing_t2_bca0faa2 function;
+    class src_app_state_chartdrawing_p2_9f04b8ed function;
+    class src_app_state_chartdrawing_text_5a27e22a function;
+    class tool_1937c4c2 klass;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>ChartDrawing</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>ChartDrawing node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>p1</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>p1 node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>p2</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>p2 node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>t1</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>t1 node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>t2</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>t2 node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>text</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>text node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>tool</code><br><small style="color:var(--muted)">src/app_state.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>tool node in src/app_state.hpp.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>Tool</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Tool node in project.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>src/app_state.hpp</code></td><td>7 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: defines x6, references x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 11. Candlestick Data Model ====== -->
+<h2 id="candlestick-data-model">11. Candlestick Data Model</h2>
+<p>Candlestick Data Model groups implementation around typeshpp, open, candle, close, mostly in src/types.hpp. This section covers 7 nodes and 6 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Candlestick Data Model (7 nodes, 6 edges)
+    src_types_candle_c5f4ba01("Candle<br/><small>src/types.hpp</small>")
+    src_types_candle_close_6cc429b3("close<br/><small>src/types.hpp</small>")
+    src_types_candle_high_32ed7edd("high<br/><small>src/types.hpp</small>")
+    src_types_candle_low_4aa8770c("low<br/><small>src/types.hpp</small>")
+    src_types_candle_open_ae3f5e6b("open<br/><small>src/types.hpp</small>")
+    src_types_candle_volume_17a8d7eb("volume<br/><small>src/types.hpp</small>")
+    src_types_candle_open_time_7b5607a9("open_time<br/><small>src/types.hpp</small>")
+    src_types_candle_c5f4ba01 -->|defines| src_types_candle_close_6cc429b3
+    src_types_candle_c5f4ba01 -->|defines| src_types_candle_high_32ed7edd
+    src_types_candle_c5f4ba01 -->|defines| src_types_candle_low_4aa8770c
+    src_types_candle_c5f4ba01 -->|defines| src_types_candle_open_ae3f5e6b
+    src_types_candle_c5f4ba01 -->|defines| src_types_candle_volume_17a8d7eb
+    src_types_candle_c5f4ba01 -->|defines| src_types_candle_open_time_7b5607a9
+    class src_types_candle_c5f4ba01 klass;
+    class src_types_candle_close_6cc429b3 function;
+    class src_types_candle_high_32ed7edd function;
+    class src_types_candle_low_4aa8770c function;
+    class src_types_candle_open_ae3f5e6b function;
+    class src_types_candle_volume_17a8d7eb function;
+    class src_types_candle_open_time_7b5607a9 function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>Candle</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Candle node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>close</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>close node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>high</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>high node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>low</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>low node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>open</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>open node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>open_time</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>open_time node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>volume</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>volume node in src/types.hpp.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>src/types.hpp</code></td><td>7 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: defines x6. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 12. Trade Data Model ====== -->
+<h2 id="trade-data-model">12. Trade Data Model</h2>
+<p>Trade Data Model groups implementation around typeshpp, trade, buyer, maker, mostly in src/types.hpp. This section covers 6 nodes and 5 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Trade Data Model (6 nodes, 5 edges)
+    src_types_trade_754a507d("Trade<br/><small>src/types.hpp</small>")
+    src_types_trade_id_3f3ceee1("id<br/><small>src/types.hpp</small>")
+    src_types_trade_time_ms_4e987c04("time_ms<br/><small>src/types.hpp</small>")
+    src_types_trade_price_6b4937ba("price<br/><small>src/types.hpp</small>")
+    src_types_trade_qty_3e28c4c1("qty<br/><small>src/types.hpp</small>")
+    src_types_trade_buyer_maker_3da7c39c("buyer_maker<br/><small>src/types.hpp</small>")
+    src_types_trade_754a507d -->|defines| src_types_trade_id_3f3ceee1
+    src_types_trade_754a507d -->|defines| src_types_trade_time_ms_4e987c04
+    src_types_trade_754a507d -->|defines| src_types_trade_price_6b4937ba
+    src_types_trade_754a507d -->|defines| src_types_trade_qty_3e28c4c1
+    src_types_trade_754a507d -->|defines| src_types_trade_buyer_maker_3da7c39c
+    class src_types_trade_754a507d klass;
+    class src_types_trade_id_3f3ceee1 function;
+    class src_types_trade_time_ms_4e987c04 function;
+    class src_types_trade_price_6b4937ba function;
+    class src_types_trade_qty_3e28c4c1 function;
+    class src_types_trade_buyer_maker_3da7c39c function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>Trade</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Trade node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>buyer_maker</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>buyer_maker node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>id</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>id node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>price</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>price node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>qty</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>qty node in src/types.hpp.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>time_ms</code><br><small style="color:var(--muted)">src/types.hpp</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>time_ms node in src/types.hpp.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>src/types.hpp</code></td><td>6 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: defines x5. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<h2 id="hyperedges">Group Relationships (Hyperedges)</h2>
+<div class="grid">
+
+  <div class="card">
+    <h4>SDL3 Callback Paradigm</h4>
+    <p><code>participate_in</code> — 3 participants</p>
+    <ul>
+      <li><code>src_main_sdl_appinit</code></li>
+      <li><code>src_main_sdl_appevent</code></li>
+      <li><code>src_main_sdl_appiterate</code></li>
+    </ul>
+  </div>
+</div>
+<hr>
+<h2 id="stats">Project Statistics</h2>
+
+<div class="grid">
+  <div class="card">
+    <h4>Graph</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><td>Nodes</td><td>332</td></tr>
+      <tr><td>Edges</td><td>646</td></tr>
+      <tr><td>Hyperedges</td><td>1</td></tr>
+      <tr><td>Communities</td><td>13</td></tr>
+      <tr><td>Documented Sections</td><td>11</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Edge Confidence</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><td>EXTRACTED</td><td>534</td></tr>
+      <tr><td>INFERRED</td><td>112</td></tr>
+      <tr><td>AMBIGUOUS</td><td>0</td></tr>
+    </table>
+  </div>
+</div>
+
+<div style="text-align:center; padding:40px 0; color: var(--muted); font-size:0.9rem;">
+  <p>SDL_Trading — Architecture Documentation</p>
+  <p>Generated: 2026-08-22 23:11 UTC · graphify callflow-html</p>
+</div>
+
+</div><!-- .container -->
+
+<script>
+(function () {
+  const mermaidConfig = {
+    startOnLoad: false,
+    theme: 'dark',
+    securityLevel: 'loose',
+    flowchart: { htmlLabels: true, useMaxWidth: true },
+    themeVariables: {
+      primaryColor: '#1e293b',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#38bdf8',
+      secondaryColor: '#0f172a',
+      tertiaryColor: '#334155',
+      lineColor: '#64748b',
+      textColor: '#e2e8f0',
+    }
+  };
+
+  mermaid.initialize(mermaidConfig);
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function enhanceMermaidDiagrams() {
+    document.querySelectorAll('.mermaid').forEach((container) => {
+      if (container.dataset.zoomReady === 'true') return;
+      const svg = container.querySelector('svg');
+      if (!svg) return;
+
+      container.dataset.zoomReady = 'true';
+      container.classList.add('is-enhanced');
+
+      const viewport = document.createElement('div');
+      viewport.className = 'mermaid-viewport';
+      svg.parentNode.insertBefore(viewport, svg);
+      viewport.appendChild(svg);
+
+      const toolbar = document.createElement('div');
+      toolbar.className = 'mermaid-toolbar';
+      toolbar.innerHTML = [
+        '<button type="button" data-action="zoom-out" title="Zoom out">-</button>',
+        '<span class="zoom-level" data-role="level">100%</span>',
+        '<button type="button" data-action="zoom-in" title="Zoom in">+</button>',
+        '<button type="button" data-action="fit" title="Fit width">Fit</button>',
+        '<button type="button" data-action="reset" title="Reset view">Reset</button>'
+      ].join('');
+      container.insertBefore(toolbar, viewport);
+
+      const state = { scale: 1, x: 0, y: 0, dragging: false, startX: 0, startY: 0, originX: 0, originY: 0 };
+      const level = toolbar.querySelector('[data-role="level"]');
+
+      function applyTransform() {
+        svg.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
+        level.textContent = `${Math.round(state.scale * 100)}%`;
+      }
+
+      function zoomBy(delta) {
+        state.scale = clamp(state.scale + delta, 0.25, 3);
+        applyTransform();
+      }
+
+      function reset() {
+        state.scale = 1;
+        state.x = 0;
+        state.y = 0;
+        applyTransform();
+      }
+
+      function fitWidth() {
+        const rawWidth = svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width
+          ? svg.viewBox.baseVal.width
+          : svg.getBoundingClientRect().width / state.scale;
+        if (!rawWidth) {
+          reset();
+          return;
+        }
+        state.scale = clamp((viewport.clientWidth - 48) / rawWidth, 0.25, 1.4);
+        state.x = 0;
+        state.y = 0;
+        applyTransform();
+      }
+
+      toolbar.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) return;
+        const action = button.dataset.action;
+        if (action === 'zoom-in') zoomBy(0.15);
+        if (action === 'zoom-out') zoomBy(-0.15);
+        if (action === 'fit') fitWidth();
+        if (action === 'reset') reset();
+      });
+
+      viewport.addEventListener('wheel', (event) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        zoomBy(event.deltaY < 0 ? 0.1 : -0.1);
+      }, { passive: false });
+
+      viewport.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0) return;
+        state.dragging = true;
+        state.startX = event.clientX;
+        state.startY = event.clientY;
+        state.originX = state.x;
+        state.originY = state.y;
+        viewport.classList.add('is-dragging');
+        viewport.setPointerCapture(event.pointerId);
+      });
+
+      viewport.addEventListener('pointermove', (event) => {
+        if (!state.dragging) return;
+        state.x = state.originX + event.clientX - state.startX;
+        state.y = state.originY + event.clientY - state.startY;
+        applyTransform();
+      });
+
+      function endDrag(event) {
+        if (!state.dragging) return;
+        state.dragging = false;
+        viewport.classList.remove('is-dragging');
+        if (viewport.hasPointerCapture(event.pointerId)) {
+          viewport.releasePointerCapture(event.pointerId);
+        }
+      }
+
+      viewport.addEventListener('pointerup', endDrag);
+      viewport.addEventListener('pointercancel', endDrag);
+      applyTransform();
+    });
+  }
+
+  function renderMermaid() {
+    const result = mermaid.run
+      ? mermaid.run({ querySelector: '.mermaid' })
+      : Promise.resolve();
+    Promise.resolve(result)
+      .then(enhanceMermaidDiagrams)
+      .catch((error) => {
+        console.error('Mermaid render failed:', error);
+        enhanceMermaidDiagrams();
+      });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', renderMermaid);
+  } else {
+    renderMermaid();
+  }
+})();
+</script>
+
+</body>
+</html>
