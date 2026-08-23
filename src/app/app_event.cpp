@@ -5,6 +5,7 @@
 #include "core/layout.hpp"
 #include "core/types.hpp"
 #include "modules/alerts.hpp"
+#include "modules/chart.hpp"
 #include "modules/market_table.hpp"
 #include "modules/right_panel.hpp"
 #include "services/favorites.hpp"
@@ -267,27 +268,21 @@ SDL_AppResult app_event(void* appstate, SDL_Event* event) {
         }
       }
 
+      // Timeframe buttons
+      int tf = hit_chart_timeframe(state, mx2, my2);
+      if (tf >= 0) {
+        state->tf_index    = tf;
+        state->view_offset = 0;
+        std::lock_guard<std::mutex> lk(state->candles_mtx);
+        state->candles.clear();
+        return SDL_APP_CONTINUE;
+      }
+
       // Chart panel local coordinates (offset by toolbox)
       float tbw2   = AppLayout::TOOLBOX_W;
       float cx_off = state->layout.chart_x + tbw2 + 4.f;
       float cy_off2 = state->layout.chart_y + 10.f;
       float cw_off = state->layout.chart_w - tbw2 - 14.f;
-
-      // Timeframe buttons
-      float btn_x_start = cx_off + cw_off - (float)(NUM_TIMEFRAMES * 54 + 10);
-      float btn_y_v     = cy_off2 + 6.f;
-      for (int i = 0; i < NUM_TIMEFRAMES; i++) {
-        float bx = btn_x_start + i * 54.f;
-        if (point_in(mx2, my2, bx, btn_y_v, 50.f, 24.f)) {
-          state->tf_index    = i;
-          state->view_offset = 0;
-          std::lock_guard<std::mutex> lk(state->candles_mtx);
-          state->candles.clear();
-          return SDL_APP_CONTINUE;
-        }
-      }
-
-      // Chart drawing area hit-test
       float chart_area_x = cx_off + 10.f;
       float chart_area_y = cy_off2 + 46.f;
       float chart_area_w = cw_off - 95.f;

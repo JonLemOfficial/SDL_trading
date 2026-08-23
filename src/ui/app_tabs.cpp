@@ -1,5 +1,4 @@
 #include "ui/app_tabs.hpp"
-
 #include "ui/ui_utils.hpp"
 
 void draw_app_tabs(AppState* state) {
@@ -11,13 +10,19 @@ void draw_app_tabs(AppState* state) {
   float tab_y = TH;
 
   static const char* TAB_LABELS[] = {
-    "MARKETS", "TRADES", "BOTS", "STRATEGIES",
-    "BACKTESTING", "EXCHANGES", "ACCOUNT", "CONFIGURATION"
+    "MARKETS",
+    "TRADES",
+    "BOTS",
+    "STRATEGIES",
+    "BACKTESTING",
+    "EXCHANGES",
+    "ACCOUNT",
+    "CONFIGURATION"
   };
   constexpr int NUM_APP_TABS = 8;
-  float tab_w = W / (float)NUM_APP_TABS;
+  float tab_w = W / (float) NUM_APP_TABS;
 
-  for (int i = 0; i < NUM_APP_TABS; i++) {
+  for ( int i = 0; i < NUM_APP_TABS; i++ ) {
     float tx = i * tab_w;
     bool active = ((int)state->active_app_tab == i);
     SDL_Color bg  = active ? tc.bg_tab_active : tc.bg_tab_idle;

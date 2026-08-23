@@ -12,6 +12,44 @@
 using json = nlohmann::json;
 
 // =============================================================================
+//  Chart layout helpers (single source of truth for draw + click hit-test)
+// =============================================================================
+
+void chart_panel_rect(AppState* state, float& cx, float& cy, float& cw, float& ch) {
+  const float TBW = AppLayout::TOOLBOX_W;
+  cx = state->layout.chart_x + TBW + 4.f;
+  cy = state->layout.chart_y + 10.f;
+  cw = state->layout.chart_w - TBW - 14.f;
+  ch = state->layout.chart_h - 20.f;
+}
+
+void chart_timeframe_btn_rect(AppState* state, int index,
+                              float& bx, float& by, float& bw, float& bh) {
+  float cx = 0.f, cy = 0.f, cw = 0.f, ch = 0.f;
+  chart_panel_rect(state, cx, cy, cw, ch);
+  (void)ch;
+
+  bw = ChartTfBtnLayout::BTN_W;
+  bh = ChartTfBtnLayout::BTN_H;
+  float row_w = (float)NUM_TIMEFRAMES * bw +
+                (float)(NUM_TIMEFRAMES - 1) * ChartTfBtnLayout::BTN_SPACING;
+  float btn_x = cx + cw - row_w;
+  float btn_y = cy + 6.f;
+  bx = btn_x + (float)index * (bw + ChartTfBtnLayout::BTN_SPACING);
+  by = btn_y;
+}
+
+int hit_chart_timeframe(AppState* state, float mx, float my) {
+  for (int i = 0; i < NUM_TIMEFRAMES; i++) {
+    float bx = 0.f, by = 0.f, bw = 0.f, bh = 0.f;
+    chart_timeframe_btn_rect(state, i, bx, by, bw, bh);
+    if (point_in(mx, my, bx, by, bw, bh))
+      return i;
+  }
+  return -1;
+}
+
+// =============================================================================
 //  Candle fetch thread
 // =============================================================================
 
@@ -60,11 +98,8 @@ void draw_chart(AppState* state) {
     const ThemeColors& tc = state->theme_colors;
 
     // Offset by toolbox width so chart panel doesn't render under the toolbox strip
-    const float TBW = AppLayout::TOOLBOX_W;
-    const float cx = state->layout.chart_x + TBW + 4.f;
-    const float cy = state->layout.chart_y + 10.f;
-    const float cw = state->layout.chart_w - TBW - 14.f;
-    const float ch = state->layout.chart_h - 20.f;
+    float cx = 0.f, cy = 0.f, cw = 0.f, ch = 0.f;
+    chart_panel_rect(state, cx, cy, cw, ch);
 
     // Background panel
     ui_fill_rect(r, cx, cy, cw, ch, tc.bg_panel);
@@ -77,16 +112,19 @@ void draw_chart(AppState* state) {
     ui_draw_text(r, state->font_lg, cx + 12.f, cy + 8.f, title.c_str(), tc.text_header);
 
     // ── Timeframe buttons ─────────────────────────────────────────────────────
-    float btn_x = cx + cw - (float)(NUM_TIMEFRAMES * 54 + 10);
-    float btn_y = cy + 6.f;
+    const float mr = 10.f;  // right margin
     for (int i = 0; i < NUM_TIMEFRAMES; i++) {
+        float bx = 0.f - mr, by = 0.f, bw = 0.f, bh = 0.f;
+        chart_timeframe_btn_rect(state, i, bx, by, bw, bh);
+
         bool active = (i == state->tf_index);
-        float bx = btn_x + i * 54.f;
-        SDL_Color bg  = active ? tc.bg_btn_active : tc.bg_btn_idle;
-        SDL_Color txt = active ? tc.text_primary   : tc.text_muted;
-        ui_fill_rect(r, bx, btn_y, 50.f, 24.f, bg);
-        ui_draw_rect(r, bx, btn_y, 50.f, 24.f, tc.border);
-        ui_draw_text_centered(r, state->font_sm, bx, btn_y, 50.f, 24.f, TIMEFRAMES[i], txt);
+        SDL_Color bg  = active ? tc.bg_btn_active : tc.bg_tab_idle;
+        SDL_Color txt = active ? tc.text_primary : tc.text_muted;
+        bool tf_hovered = point_in(state->mouse_x, state->mouse_y, bx - 10.f, by, bw, bh);
+
+        ui_fill_rect(r, bx - 10.f, by, bw, bh, tf_hovered ? tc.bg_btn_idle : bg);
+        ui_draw_rect(r, bx - 10.f, by, bw, bh, tc.border);
+        ui_draw_text_centered(r, state->font_sm, bx - 10.f, by, bw, bh, TIMEFRAMES[i], txt);
     }
 
     // ── Chart drawing area ────────────────────────────────────────────────────
